@@ -1,0 +1,62 @@
+name: kysely
+
+services:
+  reverse-proxy:
+    restart: on-failure
+    image: traefik:2.10
+    ports:
+      - "80:80"
+      - "5432:5432"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - --log.level=INFO
+      - --accesslog.filepath=/var/log/access.log
+      - --accesslog.bufferingsize=100
+      - --api.dashboard=true
+      - --providers.docker
+      - --entrypoints.web.address=:80
+      - --entrypoints.db.address=:5432
+    labels:
+      - traefik.http.routers.dashboard.rule=Host(`traefik.local.kysely.com`) && PathPrefix(`/api`, `/dashboard`)
+      - traefik.http.routers.dashboard.service=api@internal
+      - traefik.http.routers.dashboard.middlewares=auth
+      - traefik.http.middlewares.auth.basicauth.users=admin:$$2a$$12$$ujfhuxcYz8BTIgTVH13dru9fyLucun8.DqdF/5zD08CJ02CVaMa4i #admin:password
+
+  db:
+    restart: on-failure
+    image: postgres:15.3
+    expose:
+      - 5432
+    volumes:
+      - kysely-db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: username
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: database
+    labels:
+      - traefik.tcp.routers.db.rule=HostSNI(`*`)
+      - traefik.tcp.routers.db.entrypoints=db
+
+  api:
+    restart: on-failure
+    depends_on:
+      - db
+    build:
+      target: api
+    image: kysely-api
+    volumes:
+      - ./:/app/
+      - /app/node_modules/
+    command: sh -c "yarn dev"
+    expose:
+      - "3000"
+    env_file:
+      - .env
+    labels:
+      - traefik.http.routers.api.rule=Host(`api.local.kysely.com`)
+      - traefik.http.routers.api.entrypoints=web
+
+volumes:
+  kysely-db-data:
+    external: true
