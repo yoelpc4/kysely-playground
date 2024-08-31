@@ -1,4 +1,4 @@
-# Kysely API
+# Kysely Playground
 
 ## Getting started
 
