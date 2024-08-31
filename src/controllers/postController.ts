@@ -5,11 +5,9 @@ export const getPosts: RequestHandler = async (req, res, next) => {
     const postService = new PostService()
 
     try {
-        const posts = await postService.getPostsWithAuthorAndTags(req.query)
+        const paginatedPosts = await postService.getPosts(req.query)
 
-        res.status(200).json({
-            posts,
-        })
+        res.status(200).json(paginatedPosts)
     } catch (error) {
         next(error)
     }
@@ -19,7 +17,7 @@ export const findPost: RequestHandler = async (req, res, next) => {
     const postService = new PostService()
 
     try {
-        const post = await postService.findPostWithAuthorAndTags(+req.params.id)
+        const post = await postService.findPost(+req.params.id, req.query)
 
         if (!post) {
             return res.status(404).send()

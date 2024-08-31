@@ -1,28 +1,57 @@
 import TransactionalService from '@/services/TransactionalService';
-import PostRepository from '@/repositories/PostRepository';
+import PostRepository, { FindPostParams } from '@/repositories/PostRepository';
 import PostTagRepository from '@/repositories/PostTagRepository';
-import { InsertablePost, Post, UpdateablePost } from '@/types/models';
+import { InsertablePost, Post, PostRelations, UpdateablePost } from '@/types/models';
 
 export default class PostService extends TransactionalService {
     private readonly postRepository = new PostRepository()
 
     private readonly postTagRepository = new PostTagRepository()
 
-    getPostsWithAuthorAndTags(criteria: Partial<Post>) {
-        return this.postRepository.getPosts({
+    async getPosts(query: Record<string, unknown>) {
+        if (!query.page) {
+            throw new Error('page is required')
+        }
+
+        if (!query.pageSize) {
+            throw new Error('page size is required')
+        }
+
+        const page = +query.page
+
+        const pageSize = +query.pageSize
+
+        const criteria = (query.criteria as Partial<Post> | undefined)
+
+        const includes = (query.includes as PostRelations | undefined)
+
+        const posts = await this.postRepository.getPosts({
+            page,
+            pageSize,
             criteria,
-            includes: ['author', 'tags'],
+            includes,
         })
+
+        const total = await this.postRepository.getTotalPosts(criteria)
+
+        return {
+            posts,
+            meta: {
+                page,
+                pageSize,
+                total,
+            },
+        }
     }
 
-    findPost(id: number) {
-        return this.postRepository.findPost(id)
-    }
+    findPost(id: number, query?: Record<string, unknown>) {
+        const params: FindPostParams = {}
 
-    findPostWithAuthorAndTags(id: number) {
-        return this.postRepository.findPost(id, {
-            includes: ['author', 'tags'],
-        })
+        if (query) {
+            params.includes = (query.includes as PostRelations | undefined)
+        }
+
+        return this.postRepository.findPost(id, params)
     }
 
     async createPost(data: InsertablePost & { tagIds: number[] }) {
@@ -41,7 +70,9 @@ export default class PostService extends TransactionalService {
                 return post
             })
 
-        return await this.findPostWithAuthorAndTags(post.id)
+        return await this.findPost(post.id, {
+            includes: ['author', 'tags'],
+        })
     }
 
     async updatePost(id: number, data: UpdateablePost & { tagIds: number[] }) {
@@ -61,7 +92,9 @@ export default class PostService extends TransactionalService {
                 await this.syncTags(id, tagIds)
             })
 
-        return await this.findPostWithAuthorAndTags(id)
+        return await this.findPost(id, {
+            includes: ['author', 'tags'],
+        })
     }
 
     async deletePost(id: number) {

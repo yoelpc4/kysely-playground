@@ -8,6 +8,7 @@ export type UpdateableUser = Updateable<Users>
 export type Post = Selectable<Posts>
 export type InsertablePost = Insertable<Posts>
 export type UpdateablePost = Updateable<Posts>
+export type PostRelations = ('author'|'tags')[]
 
 export type PostTag = Selectable<PostTags>
 export type InsertablePostTag = Insertable<PostTags>

@@ -4,10 +4,37 @@ import { InsertableUser, UpdateableUser, User } from '@/types/models';
 export default class UserService {
     private readonly userRepository = new UserRepository()
 
-    getUsers(criteria: Partial<User>) {
-        return this.userRepository.getUsers({
+    async getUsers(query: Record<string, unknown>) {
+        if (!query.page) {
+            throw new Error('page is required')
+        }
+
+        if (!query.pageSize) {
+            throw new Error('page size is required')
+        }
+
+        const page = +query.page
+
+        const pageSize = +query.pageSize
+
+        const criteria = (query.criteria as Partial<User> | undefined)
+
+        const users = await this.userRepository.getUsers({
+            page,
+            pageSize,
             criteria,
-        });
+        })
+
+        const total = await this.userRepository.getTotalUsers(criteria)
+
+        return {
+            users,
+            meta: {
+                page,
+                pageSize,
+                total,
+            },
+        }
     }
 
     findUser(id: number) {

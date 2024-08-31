@@ -2,7 +2,7 @@ import { Expression, SqlBool } from 'kysely';
 import DatabaseRepository from '@/repositories/DatabaseRepository';
 import { Tag, InsertableTag, UpdateableTag, PostTag } from '@/types/models';
 
-interface GetTagsParams {
+export interface GetTagsParams {
     criteria?: Partial<Tag>
 }
 
@@ -17,17 +17,18 @@ export default class TagRepository extends DatabaseRepository {
 
                 if (criteria) {
                     if (criteria.id) {
-                        eb('tags.id', '=', criteria.id)
+                        filters.push(eb('tags.id', '=', criteria.id))
                     }
 
                     if (criteria.name) {
-                        eb('tags.name', '=', criteria.name)
+                        filters.push(eb('tags.name', '=', criteria.name))
                     }
                 }
 
                 return eb.and(filters)
             })
-            .selectAll()
+            .selectAll('tags')
+            .orderBy('tags.id')
             .execute()
     }
 

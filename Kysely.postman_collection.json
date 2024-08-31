@@ -15,12 +15,27 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{BASE_URL}}/users",
+							"raw": "{{BASE_URL}}/users?page=1&pageSize=10",
 							"host": [
 								"{{BASE_URL}}"
 							],
 							"path": [
 								"users"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "pageSize",
+									"value": "10"
+								},
+								{
+									"key": "criteria[name]",
+									"value": "John Doe",
+									"disabled": true
+								}
 							]
 						}
 					},
@@ -132,6 +147,13 @@
 							],
 							"path": [
 								"tags"
+							],
+							"query": [
+								{
+									"key": "criteria[name]",
+									"value": "Music",
+									"disabled": true
+								}
 							]
 						}
 					},
@@ -237,7 +259,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{BASE_URL}}/posts",
+							"raw": "{{BASE_URL}}/posts?page=1&pageSize=10&includes[]=author&includes[]=tags",
 							"host": [
 								"{{BASE_URL}}"
 							],
@@ -246,8 +268,24 @@
 							],
 							"query": [
 								{
-									"key": "title",
-									"value": "Foo",
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "pageSize",
+									"value": "10"
+								},
+								{
+									"key": "includes[]",
+									"value": "author"
+								},
+								{
+									"key": "includes[]",
+									"value": "tags"
+								},
+								{
+									"key": "criteria[title]",
+									"value": "Bar",
 									"disabled": true
 								}
 							]
@@ -261,13 +299,23 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{BASE_URL}}/posts/1",
+							"raw": "{{BASE_URL}}/posts/1?includes[]=author&includes[]=tags",
 							"host": [
 								"{{BASE_URL}}"
 							],
 							"path": [
 								"posts",
 								"1"
+							],
+							"query": [
+								{
+									"key": "includes[]",
+									"value": "author"
+								},
+								{
+									"key": "includes[]",
+									"value": "tags"
+								}
 							]
 						}
 					},

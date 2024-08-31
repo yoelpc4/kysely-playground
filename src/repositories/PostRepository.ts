@@ -1,21 +1,25 @@
-import { Expression, SelectExpression, SqlBool } from 'kysely';
+import { Expression, SelectExpression, sql, SqlBool } from 'kysely';
 import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
 import DatabaseRepository from '@/repositories/DatabaseRepository';
 import { DB } from '@/types/db';
-import { InsertablePost, Post, UpdateablePost } from '@/types/models';
+import { InsertablePost, Post, PostRelations, UpdateablePost } from '@/types/models';
 
-interface GetPostsParams {
+export interface GetPostsParams {
+    page: number
+    pageSize: number
     criteria?: Partial<Post>
-    includes?: ('author' | 'tags')[]
+    includes?: PostRelations
 }
 
-interface FindPostParams {
-    includes?: ('author' | 'tags')[]
+export interface FindPostParams {
+    includes?: PostRelations
 }
 
 export default class PostRepository extends DatabaseRepository {
-    getPosts(params: GetPostsParams = {}) {
-        const { criteria, includes } = params
+    getPosts(params: GetPostsParams) {
+        const { page, pageSize, criteria, includes } = params
+
+        const offset = (page - 1) * pageSize
 
         return this.getDB()
             .selectFrom('posts')
@@ -54,7 +58,38 @@ export default class PostRepository extends DatabaseRepository {
 
                 return selections
             })
+            .orderBy('posts.id')
+            .limit(pageSize)
+            .offset(offset)
             .execute()
+    }
+
+    async getTotalPosts(criteria?: Partial<Post>) {
+        const [{total}] = await this.getDB()
+            .selectFrom('posts')
+            .where((eb) => {
+                const filters: Expression<SqlBool>[] = []
+
+                if (criteria) {
+                    if (criteria.id) {
+                        filters.push(eb('posts.id', '=', criteria.id))
+                    }
+
+                    if (criteria.authorId) {
+                        filters.push(eb('posts.authorId', '=', criteria.authorId))
+                    }
+
+                    if (criteria.title) {
+                        filters.push(eb('posts.title', '=', criteria.title))
+                    }
+                }
+
+                return eb.and(filters)
+            })
+            .select(sql<number>`COUNT(*)`.as('total'))
+            .execute()
+
+        return +total
     }
 
     findPost(id: number, params: FindPostParams = {}) {

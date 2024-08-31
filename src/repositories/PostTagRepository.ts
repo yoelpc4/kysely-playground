@@ -2,7 +2,7 @@ import { Expression, SqlBool } from 'kysely';
 import DatabaseRepository from '@/repositories/DatabaseRepository';
 import { InsertablePostTag, PostTag } from '@/types/models';
 
-interface GetPostTagsParams {
+export interface GetPostTagsParams {
     criteria?: Partial<PostTag>
 }
 
