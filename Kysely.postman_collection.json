@@ -287,6 +287,31 @@
 									"key": "criteria[title]",
 									"value": "Bar",
 									"disabled": true
+								},
+								{
+									"key": "criteria[hasAuthor]",
+									"value": "1",
+									"disabled": true
+								},
+								{
+									"key": "criteria[author][name]",
+									"value": "John Doe",
+									"disabled": true
+								},
+								{
+									"key": "criteria[hasTag]",
+									"value": "1",
+									"disabled": true
+								},
+								{
+									"key": "criteria[tag]",
+									"value": "true",
+									"disabled": true
+								},
+								{
+									"key": "criteria[tag][name]",
+									"value": "Computer",
+									"disabled": true
 								}
 							]
 						}

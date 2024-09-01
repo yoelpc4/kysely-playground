@@ -1,5 +1,5 @@
 import TransactionalService from '@/services/TransactionalService';
-import PostRepository, { FindPostParams } from '@/repositories/PostRepository';
+import PostRepository, { FindPostParams, GetPostsCriteria } from '@/repositories/PostRepository';
 import PostTagRepository from '@/repositories/PostTagRepository';
 import { InsertablePost, Post, PostRelations, UpdateablePost } from '@/types/models';
 
@@ -21,7 +21,7 @@ export default class PostService extends TransactionalService {
 
         const pageSize = +query.pageSize
 
-        const criteria = (query.criteria as Partial<Post> | undefined)
+        const criteria = (query.criteria as GetPostsCriteria | undefined)
 
         const includes = (query.includes as PostRelations | undefined)
 
