@@ -16,4 +16,8 @@ export default abstract class DatabaseRepository {
     protected getDB(): Kysely<DB> | Transaction<DB> {
         return this.trx ?? db
     }
+
+    protected getOffset(page: number, pageSize: number) {
+        return (page - 1) * pageSize
+    }
 }
