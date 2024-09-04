@@ -1,7 +1,8 @@
-import { Expression, sql, SqlBool } from 'kysely';
+import { Expression, expressionBuilder, sql, SqlBool } from 'kysely';
 import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
 import DatabaseRepository from '@/repositories/DatabaseRepository';
 import { InsertablePost, Post, PostRelations, Tag, UpdateablePost, User } from '@/types/models';
+import { DB } from '@/types/db';
 
 export type GetPostsCriteria = Partial<Post> & {
     hasAuthor?: boolean
@@ -54,15 +55,15 @@ export default class PostRepository extends DatabaseRepository {
                 }
 
                 if (criteria.hasAuthor) {
-                    filters.push(eb.exists(this.authorRows(eb.ref('posts.authorId'))))
+                    filters.push(this.hasAuthor(eb.ref('posts.authorId')))
                 } else if (criteria.author) {
-                    filters.push(eb.exists(this.authorRows(eb.ref('posts.authorId'), criteria.author)))
+                    filters.push(this.hasAuthor(eb.ref('posts.authorId'), criteria.author))
                 }
 
                 if (criteria.hasTags) {
-                    filters.push(eb.exists(this.tagRows(eb.ref('posts.id'))))
+                    filters.push(this.hasTags(eb.ref('posts.id')))
                 } else if (criteria.tags) {
-                    filters.push(eb.exists(this.tagRows(eb.ref('posts.id'), criteria.tags)))
+                    filters.push(this.hasTags(eb.ref('posts.id'), criteria.tags))
                 }
 
                 return eb.and(filters)
@@ -127,15 +128,15 @@ export default class PostRepository extends DatabaseRepository {
                     }
 
                     if (criteria.hasAuthor) {
-                        filters.push(eb.exists(this.authorRows(eb.ref('posts.authorId'))))
+                        filters.push(this.hasAuthor(eb.ref('posts.authorId')))
                     } else if (criteria.author) {
-                        filters.push(eb.exists(this.authorRows(eb.ref('posts.authorId'), criteria.author)))
+                        filters.push(this.hasAuthor(eb.ref('posts.authorId'), criteria.author))
                     }
 
                     if (criteria.hasTags) {
-                        filters.push(eb.exists(this.tagRows(eb.ref('posts.id'))))
+                        filters.push(this.hasTags(eb.ref('posts.id')))
                     } else if (criteria.tags) {
-                        filters.push(eb.exists(this.tagRows(eb.ref('posts.id'), criteria.tags)))
+                        filters.push(this.hasTags(eb.ref('posts.id'), criteria.tags))
                     }
                 }
 
@@ -196,26 +197,29 @@ export default class PostRepository extends DatabaseRepository {
         )
     }
 
-    protected authorRows(authorId: Expression<number>, criteria?: Partial<User>) {
-        return this.getDB()
-            .selectFrom('users as authors')
-            .whereRef('authors.id', '=', authorId)
-            .where((eb) => {
-                const filters: Expression<SqlBool>[] = []
+    protected hasAuthor(authorId: Expression<number>, criteria?: Partial<User>) {
+        const {exists, selectFrom} = expressionBuilder<DB, never>()
 
-                if (criteria) {
-                    if (criteria.email) {
-                        filters.push(eb('authors.email', '=', criteria.email))
+        return exists(
+            selectFrom('users as authors')
+                .whereRef('authors.id', '=', authorId)
+                .where((eb) => {
+                    const filters: Expression<SqlBool>[] = []
+
+                    if (criteria) {
+                        if (criteria.email) {
+                            filters.push(eb('authors.email', '=', criteria.email))
+                        }
+
+                        if (criteria.name) {
+                            filters.push(eb('authors.name', '=', criteria.name))
+                        }
                     }
 
-                    if (criteria.name) {
-                        filters.push(eb('authors.name', '=', criteria.name))
-                    }
-                }
-
-                return eb.and(filters)
-            })
-            .select(sql<number>`1`.as('1'))
+                    return eb.and(filters)
+                })
+                .select(sql<number>`1`.as('1'))
+        )
     }
 
     protected tags(postId: Expression<number>) {
@@ -232,26 +236,29 @@ export default class PostRepository extends DatabaseRepository {
         )
     }
 
-    protected tagRows(postId: Expression<number>, criteria?: Partial<Tag>) {
-        return this.getDB()
-            .selectFrom('tags')
-            .innerJoin(
-                'postTags',
-                (join) => join
-                    .onRef('postTags.tagId', '=', 'tags.id')
-                    .onRef('postTags.postId', '=', postId)
-            )
-            .where((eb) => {
-                const filters: Expression<SqlBool>[] = []
+    protected hasTags(postId: Expression<number>, criteria?: Partial<Tag>) {
+        const {exists, selectFrom} = expressionBuilder<DB, never>()
 
-                if (criteria) {
-                    if (criteria.name) {
-                        filters.push(eb('tags.name', '=', criteria.name))
+        return exists(
+            selectFrom('tags')
+                .innerJoin(
+                    'postTags',
+                    (join) => join
+                        .onRef('postTags.tagId', '=', 'tags.id')
+                        .onRef('postTags.postId', '=', postId)
+                )
+                .where((eb) => {
+                    const filters: Expression<SqlBool>[] = []
+
+                    if (criteria) {
+                        if (criteria.name) {
+                            filters.push(eb('tags.name', '=', criteria.name))
+                        }
                     }
-                }
 
-                return eb.and(filters)
-            })
-            .select(sql<number>`1`.as('1'))
+                    return eb.and(filters)
+                })
+                .select(sql<number>`1`.as('1'))
+        )
     }
 }
