@@ -259,7 +259,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{BASE_URL}}/posts?page=1&pageSize=10&includes[]=author&includes[]=tags",
+							"raw": "{{BASE_URL}}/posts?page=1&pageSize=10&includes[]=author&includes[]=tags&sorts[]=-createdAt",
 							"host": [
 								"{{BASE_URL}}"
 							],
@@ -299,18 +299,37 @@
 									"disabled": true
 								},
 								{
-									"key": "criteria[hasTag]",
+									"key": "criteria[hasTags]",
 									"value": "1",
 									"disabled": true
 								},
 								{
-									"key": "criteria[tag]",
+									"key": "criteria[tags]",
 									"value": "true",
 									"disabled": true
 								},
 								{
-									"key": "criteria[tag][name]",
+									"key": "criteria[tags][name]",
 									"value": "Computer",
+									"disabled": true
+								},
+								{
+									"key": "sorts[]",
+									"value": "id",
+									"disabled": true
+								},
+								{
+									"key": "sorts[]",
+									"value": "title",
+									"disabled": true
+								},
+								{
+									"key": "sorts[]",
+									"value": "-createdAt"
+								},
+								{
+									"key": "sorts[]",
+									"value": "author.name",
 									"disabled": true
 								}
 							]
