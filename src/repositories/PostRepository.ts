@@ -84,22 +84,31 @@ export default class PostRepository extends DatabaseRepository {
             query = query.orderBy('posts.id asc')
         } else {
             for (const sort of sorts) {
-                if (sort === 'id') {
-                    query = query.orderBy('posts.id asc')
-                } else if (sort === '-id') {
-                    query = query.orderBy('posts.id desc')
-                } else if (sort === 'title') {
-                    query = query.orderBy('posts.title asc')
-                } else if (sort === '-title') {
-                    query = query.orderBy('posts.title desc')
-                } else if (sort === 'createdAt') {
-                    query = query.orderBy('posts.createdAt asc')
-                } else if (sort === '-createdAt') {
-                    query = query.orderBy('posts.createdAt desc')
-                } else if (sort === 'author.name') {
-                    query = query.orderBy('authors.name asc')
-                } else if (sort === '-author.name') {
-                    query = query.orderBy('authors.name desc')
+                switch (sort) {
+                    case 'id':
+                        query = query.orderBy('posts.id asc')
+                        break
+                    case '-id':
+                        query = query.orderBy('posts.id desc')
+                        break
+                    case 'title':
+                        query = query.orderBy('posts.title asc')
+                        break
+                    case '-title':
+                        query = query.orderBy('posts.title desc')
+                        break
+                    case 'createdAt':
+                        query = query.orderBy('posts.createdAt asc')
+                        break
+                    case '-createdAt':
+                        query = query.orderBy('posts.createdAt desc')
+                        break
+                    case 'author.name':
+                        query = query.orderBy('authors.name asc')
+                        break
+                    case '-author.name':
+                        query = query.orderBy('authors.name desc')
+                        break
                 }
             }
         }
@@ -189,9 +198,10 @@ export default class PostRepository extends DatabaseRepository {
     }
 
     protected author(authorId: Expression<number>) {
+        const {selectFrom} = expressionBuilder<DB, never>()
+
         return jsonObjectFrom(
-            this.getDB()
-                .selectFrom('users as authors')
+            selectFrom('users as authors')
                 .whereRef('authors.id', '=', authorId)
                 .selectAll('authors')
         )
@@ -223,9 +233,10 @@ export default class PostRepository extends DatabaseRepository {
     }
 
     protected tags(postId: Expression<number>) {
+        const {selectFrom} = expressionBuilder<DB, never>()
+
         return jsonArrayFrom(
-            this.getDB()
-                .selectFrom('tags')
+            selectFrom('tags')
                 .innerJoin(
                     'postTags',
                     (join) => join
