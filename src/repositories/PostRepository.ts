@@ -1,38 +1,11 @@
 import { Expression, expressionBuilder, sql, SqlBool } from 'kysely';
 import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
 import DatabaseRepository from '@/repositories/DatabaseRepository';
-import { InsertablePost, Post, PostRelations, Tag, UpdateablePost, User } from '@/types/models';
+import { InsertablePost, Tag, UpdateablePost, User } from '@/types/models';
 import { DB } from '@/types/db';
+import { GetPostsCriteria, GetPostsParams, GetPostsIncludes } from '@/repositories/PostRepository.types';
 
-export type GetPostsCriteria = Partial<Post> & {
-    hasAuthor?: boolean
-    author?: Partial<User>
-    hasTags?: boolean
-    tags?: Partial<Tag>
-}
-
-export type GetPostsSort = (
-    'id'
-    | '-id'
-    | 'title'
-    | '-title'
-    | 'createdAt'
-    | '-createdAt'
-    | 'author.name'
-    | '-author.name'
-    )[]
-
-export interface GetPostsParams {
-    page: number
-    pageSize: number
-    criteria?: GetPostsCriteria
-    includes?: PostRelations
-    sorts?: GetPostsSort
-}
-
-export interface FindPostParams {
-    includes?: PostRelations
-}
+export * from '@/repositories/PostRepository.types'
 
 export default class PostRepository extends DatabaseRepository {
     getPosts({page, pageSize, criteria = {}, includes = [], sorts = []}: GetPostsParams) {
@@ -116,37 +89,35 @@ export default class PostRepository extends DatabaseRepository {
         return query.execute()
     }
 
-    async getTotalPosts(criteria?: GetPostsCriteria) {
+    async getTotalPosts(criteria: GetPostsCriteria = {}) {
         const [{total}] = await this.getDB()
             .selectFrom('posts')
             .innerJoin('users as authors', 'authors.id', 'posts.authorId')
             .where((eb) => {
                 const filters: Expression<SqlBool>[] = []
 
-                if (criteria) {
-                    if (criteria.id) {
-                        filters.push(eb('posts.id', '=', criteria.id))
-                    }
+                if (criteria.id) {
+                    filters.push(eb('posts.id', '=', criteria.id))
+                }
 
-                    if (criteria.authorId) {
-                        filters.push(eb('posts.authorId', '=', criteria.authorId))
-                    }
+                if (criteria.authorId) {
+                    filters.push(eb('posts.authorId', '=', criteria.authorId))
+                }
 
-                    if (criteria.title) {
-                        filters.push(eb('posts.title', '=', criteria.title))
-                    }
+                if (criteria.title) {
+                    filters.push(eb('posts.title', '=', criteria.title))
+                }
 
-                    if (criteria.hasAuthor) {
-                        filters.push(this.hasAuthor(eb.ref('posts.authorId')))
-                    } else if (criteria.author) {
-                        filters.push(this.hasAuthor(eb.ref('posts.authorId'), criteria.author))
-                    }
+                if (criteria.hasAuthor) {
+                    filters.push(this.hasAuthor(eb.ref('posts.authorId')))
+                } else if (criteria.author) {
+                    filters.push(this.hasAuthor(eb.ref('posts.authorId'), criteria.author))
+                }
 
-                    if (criteria.hasTags) {
-                        filters.push(this.hasTags(eb.ref('posts.id')))
-                    } else if (criteria.tags) {
-                        filters.push(this.hasTags(eb.ref('posts.id'), criteria.tags))
-                    }
+                if (criteria.hasTags) {
+                    filters.push(this.hasTags(eb.ref('posts.id')))
+                } else if (criteria.tags) {
+                    filters.push(this.hasTags(eb.ref('posts.id'), criteria.tags))
                 }
 
                 return eb.and(filters)
@@ -157,7 +128,7 @@ export default class PostRepository extends DatabaseRepository {
         return +total
     }
 
-    findPost(id: number, {includes = []}: FindPostParams = {}) {
+    findPost(id: number, includes: GetPostsIncludes = []) {
         return this.getDB()
             .selectFrom('posts')
             .where('posts.id', '=', id)
