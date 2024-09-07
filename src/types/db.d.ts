@@ -11,11 +11,19 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface Comments {
+  content: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<number>;
+  postId: number;
+  updated_at: Timestamp | null;
+  userId: number;
+}
+
 export interface Posts {
   authorId: number;
   body: string;
   createdAt: Generated<Timestamp>;
-  deletedAt: Timestamp | null;
   id: Generated<number>;
   title: string;
   updatedAt: Timestamp | null;
@@ -28,7 +36,6 @@ export interface PostTags {
 
 export interface Tags {
   createdAt: Generated<Timestamp>;
-  deletedAt: Timestamp | null;
   id: Generated<number>;
   name: string;
   updatedAt: Timestamp | null;
@@ -36,7 +43,6 @@ export interface Tags {
 
 export interface Users {
   createdAt: Generated<Timestamp>;
-  deletedAt: Timestamp | null;
   email: string;
   id: Generated<number>;
   name: string;
@@ -44,6 +50,7 @@ export interface Users {
 }
 
 export interface DB {
+  comments: Comments;
   posts: Posts;
   postTags: PostTags;
   tags: Tags;
