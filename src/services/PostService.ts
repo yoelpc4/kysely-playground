@@ -1,7 +1,9 @@
 import TransactionalService from '@/services/TransactionalService';
-import PostRepository, { FindPostParams, GetPostsCriteria, GetPostsSort } from '@/repositories/PostRepository';
+import PostRepository, { GetPostsCriteria, GetPostsSorts, GetPostsIncludes } from '@/repositories/PostRepository';
 import PostTagRepository from '@/repositories/PostTagRepository';
-import { InsertablePost, PostRelations, UpdateablePost } from '@/types/models';
+import { CreatePostData, UpdatePostData } from '@/services/PostService.types';
+
+export * from '@/services/PostService.types'
 
 export default class PostService extends TransactionalService {
     private readonly postRepository = new PostRepository()
@@ -23,9 +25,9 @@ export default class PostService extends TransactionalService {
 
         const criteria = (query.criteria as GetPostsCriteria | undefined)
 
-        const includes = (query.includes as PostRelations | undefined)
+        const includes = (query.includes as GetPostsIncludes | undefined)
 
-        const sorts = (query.sorts as GetPostsSort | undefined)
+        const sorts = (query.sorts as GetPostsSorts | undefined)
 
         const posts = await this.postRepository.getPosts({
             page,
@@ -48,19 +50,13 @@ export default class PostService extends TransactionalService {
     }
 
     findPost(id: number, query?: Record<string, unknown>) {
-        const params: FindPostParams = {}
-
-        if (query) {
-            params.includes = (query.includes as PostRelations | undefined)
-        }
-
-        return this.postRepository.findPost(id, params)
+        return this.postRepository.findPost(id, query?.includes as GetPostsIncludes | undefined)
     }
 
-    async createPost(data: InsertablePost & { tagIds: number[] }) {
+    async createPost(data: CreatePostData) {
         const {tagIds, ...postData} = data
 
-        const post = await this
+        return await this
             .registerForTransaction(
                 this.postRepository,
                 this.postTagRepository,
@@ -72,32 +68,26 @@ export default class PostService extends TransactionalService {
 
                 return post
             })
-
-        return await this.findPost(post.id, {
-            includes: ['author', 'tags'],
-        })
     }
 
-    async updatePost(id: number, data: UpdateablePost & { tagIds: number[] }) {
+    async updatePost(id: number, data: UpdatePostData) {
         const {tagIds, ...postData} = data
 
-        await this
+        return await this
             .registerForTransaction(
                 this.postRepository,
                 this.postTagRepository,
             )
             .executeTransaction(async () => {
-                await this.postRepository.updatePost(id, {
+                const post = await this.postRepository.updatePost(id, {
                     ...postData,
                     updatedAt: new Date(),
                 })
 
                 await this.syncTags(id, tagIds)
-            })
 
-        return await this.findPost(id, {
-            includes: ['author', 'tags'],
-        })
+                return post
+            })
     }
 
     async deletePost(id: number) {
