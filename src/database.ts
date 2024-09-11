@@ -10,5 +10,5 @@ export const db = new Kysely<DB>({
         })
     }),
     // uncomment line below to log query and error
-    // log: ['query', 'error'],
+    log: ['query', 'error'],
 })

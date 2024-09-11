@@ -1,9 +1,7 @@
-import { Expression, SelectExpression, sql, SqlBool } from "kysely";
+import { Expression, expressionBuilder, sql, SqlBool } from "kysely";
 import { jsonArrayFrom, jsonObjectFrom } from "kysely/helpers/postgres";
 import DatabaseRepository from "@/repositories/DatabaseRepository";
-import { DB } from "@/types/db";
 import {
-  Comment,
   InsertablePost,
   Post,
   PostRelations,
@@ -11,21 +9,32 @@ import {
   UpdateablePost,
   User,
 } from "@/types/models";
+import { DB } from "@/types/db";
 
 export type GetPostsCriteria = Partial<Post> & {
   hasAuthor?: boolean;
   author?: Partial<User>;
   hasTags?: boolean;
-  tag?: Partial<Tag>;
-  hasComments?: boolean;
-  comments?: Partial<Comment>;
+  tags?: Partial<Tag>;
 };
+
+export type GetPostsSort = (
+  | "id"
+  | "-id"
+  | "title"
+  | "-title"
+  | "createdAt"
+  | "-createdAt"
+  | "author.name"
+  | "-author.name"
+)[];
 
 export interface GetPostsParams {
   page: number;
   pageSize: number;
   criteria?: GetPostsCriteria;
   includes?: PostRelations;
+  sorts?: GetPostsSort;
 }
 
 export interface FindPostParams {
@@ -33,79 +42,88 @@ export interface FindPostParams {
 }
 
 export default class PostRepository extends DatabaseRepository {
-  getPosts(params: GetPostsParams) {
-    const { page, pageSize, criteria, includes } = params;
-
-    const offset = (page - 1) * pageSize;
-
-    return this.getDB()
+  getPosts({
+    page,
+    pageSize,
+    criteria = {},
+    includes = [],
+    sorts = [],
+  }: GetPostsParams) {
+    let query = this.getDB()
       .selectFrom("posts")
+      .innerJoin("users as authors", "authors.id", "posts.authorId")
       .where((eb) => {
         const filters: Expression<SqlBool>[] = [];
 
-        if (criteria) {
-          if (criteria.id) {
-            filters.push(eb("posts.id", "=", criteria.id));
-          }
+        if (criteria.id) {
+          filters.push(eb("posts.id", "=", criteria.id));
+        }
 
-          if (criteria.authorId) {
-            filters.push(eb("posts.authorId", "=", criteria.authorId));
-          }
+        if (criteria.authorId) {
+          filters.push(eb("posts.authorId", "=", criteria.authorId));
+        }
 
-          if (criteria.title) {
-            filters.push(eb("posts.title", "=", criteria.title));
-          }
+        if (criteria.title) {
+          filters.push(eb("posts.title", "=", criteria.title));
+        }
 
-          if (criteria.hasAuthor) {
-            filters.push(eb.exists(this.authorRows(eb.ref("posts.authorId"))));
-          } else if (criteria.author) {
-            filters.push(
-              eb.exists(
-                this.authorRows(eb.ref("posts.authorId"), criteria.author)
-              )
-            );
-          }
+        if (criteria.hasAuthor) {
+          filters.push(this.hasAuthor(eb.ref("posts.authorId")));
+        } else if (criteria.author) {
+          filters.push(
+            this.hasAuthor(eb.ref("posts.authorId"), criteria.author)
+          );
+        }
 
-          if (criteria.hasTags) {
-            filters.push(eb.exists(this.tagRows(eb.ref("posts.id"))));
-          } else if (criteria.tag) {
-            filters.push(
-              eb.exists(this.tagRows(eb.ref("posts.id"), criteria.tag))
-            );
-          }
+        if (criteria.hasTags) {
+          filters.push(this.hasTags(eb.ref("posts.id")));
+        } else if (criteria.tags) {
+          filters.push(this.hasTags(eb.ref("posts.id"), criteria.tags));
         }
 
         return eb.and(filters);
       })
       .selectAll("posts")
-      .select((eb) => {
-        const selections: SelectExpression<DB, "posts">[] = [];
-
-        if (includes) {
-          if (includes.includes("author")) {
-            selections.push(this.author(eb.ref("posts.authorId")).as("author"));
-          }
-
-          if (includes.includes("comments")) {
-            selections.push(this.comments(eb.ref("posts.id")).as("tags"));
-          }
-
-          if (includes.includes("tags")) {
-            selections.push(this.tags(eb.ref("posts.id")).as("tags"));
-          }
-        }
-
-        return selections;
-      })
-      .orderBy("posts.id")
+      .$if(includes.includes("author"), (qb) =>
+        qb.select((eb) => this.author(eb.ref("posts.authorId")).as("author"))
+      )
+      .$if(includes.includes("tags"), (qb) =>
+        qb.select((eb) => this.tags(eb.ref("posts.id")).as("tags"))
+      )
       .limit(pageSize)
-      .offset(offset)
-      .execute();
+      .offset(this.getOffset(page, pageSize));
+
+    if (!sorts) {
+      query = query.orderBy("posts.id asc");
+    } else {
+      for (const sort of sorts) {
+        if (sort === "id") {
+          query = query.orderBy("posts.id asc");
+        } else if (sort === "-id") {
+          query = query.orderBy("posts.id desc");
+        } else if (sort === "title") {
+          query = query.orderBy("posts.title asc");
+        } else if (sort === "-title") {
+          query = query.orderBy("posts.title desc");
+        } else if (sort === "createdAt") {
+          query = query.orderBy("posts.createdAt asc");
+        } else if (sort === "-createdAt") {
+          query = query.orderBy("posts.createdAt desc");
+        } else if (sort === "author.name") {
+          query = query.orderBy("authors.name asc");
+        } else if (sort === "-author.name") {
+          query = query.orderBy("authors.name desc");
+        }
+      }
+    }
+
+    return query.execute();
   }
 
   async getTotalPosts(criteria?: GetPostsCriteria) {
     const [{ total }] = await this.getDB()
       .selectFrom("posts")
+      .innerJoin("users as authors", "authors.id", "posts.authorId")
       .where((eb) => {
         const filters: Expression<SqlBool>[] = [];
 
@@ -123,66 +141,39 @@ export default class PostRepository extends DatabaseRepository {
           }
 
           if (criteria.hasAuthor) {
-            filters.push(eb.exists(this.authorRows(eb.ref("posts.authorId"))));
+            filters.push(this.hasAuthor(eb.ref("posts.authorId")));
           } else if (criteria.author) {
             filters.push(
-              eb.exists(
-                this.authorRows(eb.ref("posts.authorId"), criteria.author)
-              )
+              this.hasAuthor(eb.ref("posts.authorId"), criteria.author)
             );
           }
 
           if (criteria.hasTags) {
-            filters.push(eb.exists(this.tagRows(eb.ref("posts.id"))));
-          } else if (criteria.tag) {
-            filters.push(
-              eb.exists(this.tagRows(eb.ref("posts.id"), criteria.tag))
-            );
+            filters.push(this.hasTags(eb.ref("posts.id")));
+          } else if (criteria.tags) {
+            filters.push(this.hasTags(eb.ref("posts.id"), criteria.tags));
           }
-
-          // if (criteria.hasComments) {
-          //   filters.push(eb.exists(this.commentRows(eb.ref("posts.id"))));
-          // } else if (criteria.comments) {
-          //   filters.push(
-          //     eb.exists(this.commentRows(eb.ref("posts.id"), criteria.comments))
-          //   );
-          // }
         }
 
         return eb.and(filters);
       })
-      .select(sql<number>`COUNT (*)`.as("total"))
+      .select(sql<number>`COUNT(*)`.as("total"))
       .execute();
 
     return +total;
   }
 
-  findPost(id: number, params: FindPostParams = {}) {
-    const { includes } = params;
-
+  findPost(id: number, { includes = [] }: FindPostParams = {}) {
     return this.getDB()
       .selectFrom("posts")
       .where("posts.id", "=", id)
       .selectAll("posts")
-      .select((eb) => {
-        const selections: SelectExpression<DB, "posts">[] = [];
-
-        if (includes) {
-          if (includes.includes("author")) {
-            selections.push(this.author(eb.ref("posts.authorId")).as("author"));
-          }
-
-          if (includes.includes("tags")) {
-            selections.push(this.tags(eb.ref("posts.id")).as("tags"));
-          }
-
-          if (includes.includes("comments")) {
-            selections.push(this.comments(eb.ref("posts.id")).as("comments"));
-          }
-        }
-
-        return selections;
-      })
+      .$if(includes.includes("author"), (qb) =>
+        qb.select((eb) => this.author(eb.ref("posts.authorId")).as("author"))
+      )
+      .$if(includes.includes("tags"), (qb) =>
+        qb.select((eb) => this.tags(eb.ref("posts.id")).as("tags"))
+      )
       .executeTakeFirst();
   }
 
@@ -219,37 +210,30 @@ export default class PostRepository extends DatabaseRepository {
     );
   }
 
-  protected authorRows(authorId: Expression<number>, criteria?: Partial<User>) {
-    return this.getDB()
-      .selectFrom("users as authors")
-      .whereRef("authors.id", "=", authorId)
-      .where((eb) => {
-        const filters: Expression<SqlBool>[] = [];
+  protected hasAuthor(authorId: Expression<number>, criteria?: Partial<User>) {
+    const { exists, selectFrom } = expressionBuilder<DB, never>();
 
-        if (criteria) {
-          if (criteria.email) {
-            filters.push(eb("authors.email", "=", criteria.email));
+    return exists(
+      selectFrom("users as authors")
+        .whereRef("authors.id", "=", authorId)
+        .where((eb) => {
+          const filters: Expression<SqlBool>[] = [];
+
+          if (criteria) {
+            if (criteria.email) {
+              filters.push(eb("authors.email", "=", criteria.email));
+            }
+
+            if (criteria.name) {
+              filters.push(eb("authors.name", "=", criteria.name));
+            }
           }
 
-          if (criteria.name) {
-            filters.push(eb("authors.name", "=", criteria.name));
-          }
-        }
-
-        return eb.and(filters);
-      })
-      .select(sql<number>`1`.as("1"));
+          return eb.and(filters);
+        })
+        .select(sql<number>`1`.as("1"))
+    );
   }
-
-  // protected commentRows(
-  //   postId: Expression<number>,
-  //   criteria?: Partial<Comment>
-  // ) {
-  //   return this.getDB()
-  //     .selectFrom("comments as comments")
-  //     .whereRef("comments.postId", '=', postId);
-  //     .select(sql<number>`1`.as("1"));
-  // }
 
   protected tags(postId: Expression<number>) {
     return jsonArrayFrom(
@@ -264,34 +248,28 @@ export default class PostRepository extends DatabaseRepository {
     );
   }
 
-  protected comments(postId: Expression<number>) {
-    return jsonArrayFrom(
-      this.getDB()
-        .selectFrom("comments")
-        .where("comments.postId", "=", postId)
-        .selectAll("comments")
-    );
-  }
+  protected hasTags(postId: Expression<number>, criteria?: Partial<Tag>) {
+    const { exists, selectFrom } = expressionBuilder<DB, never>();
 
-  protected tagRows(postId: Expression<number>, criteria?: Partial<Tag>) {
-    return this.getDB()
-      .selectFrom("tags")
-      .innerJoin("postTags", (join) =>
-        join
-          .onRef("postTags.tagId", "=", "tags.id")
-          .onRef("postTags.postId", "=", postId)
-      )
-      .where((eb) => {
-        const filters: Expression<SqlBool>[] = [];
+    return exists(
+      selectFrom("tags")
+        .innerJoin("postTags", (join) =>
+          join
+            .onRef("postTags.tagId", "=", "tags.id")
+            .onRef("postTags.postId", "=", postId)
+        )
+        .where((eb) => {
+          const filters: Expression<SqlBool>[] = [];
 
-        if (criteria) {
-          if (criteria.name) {
-            filters.push(eb("tags.name", "=", criteria.name));
+          if (criteria) {
+            if (criteria.name) {
+              filters.push(eb("tags.name", "=", criteria.name));
+            }
           }
-        }
 
-        return eb.and(filters);
-      })
-      .select(sql<number>`1`.as("1"));
+          return eb.and(filters);
+        })
+        .select(sql<number>`1`.as("1"))
+    );
   }
 }

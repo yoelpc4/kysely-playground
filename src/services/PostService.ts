@@ -1,7 +1,7 @@
 import TransactionalService from '@/services/TransactionalService';
-import PostRepository, { FindPostParams, GetPostsCriteria } from '@/repositories/PostRepository';
+import PostRepository, { FindPostParams, GetPostsCriteria, GetPostsSort } from '@/repositories/PostRepository';
 import PostTagRepository from '@/repositories/PostTagRepository';
-import { InsertablePost, Post, PostRelations, UpdateablePost } from '@/types/models';
+import { InsertablePost, PostRelations, UpdateablePost } from '@/types/models';
 
 export default class PostService extends TransactionalService {
     private readonly postRepository = new PostRepository()
@@ -25,11 +25,14 @@ export default class PostService extends TransactionalService {
 
         const includes = (query.includes as PostRelations | undefined)
 
+        const sorts = (query.sorts as GetPostsSort | undefined)
+
         const posts = await this.postRepository.getPosts({
             page,
             pageSize,
             criteria,
             includes,
+            sorts,
         })
 
         const total = await this.postRepository.getTotalPosts(criteria)

@@ -6,15 +6,21 @@ import {
   CommentRelations,
   UpdateableComment,
 } from "@/types/models";
-import { Expression, SelectExpression, sql, SqlBool } from "kysely";
+import {
+  Expression,
+  expressionBuilder,
+  SelectExpression,
+  sql,
+  SqlBool,
+} from "kysely";
 import DatabaseRepository from "./DatabaseRepository";
 import { DB } from "@/types/db";
 import { jsonObjectFrom } from "kysely/helpers/postgres";
 
 export type GetCommentsCriteria = Partial<Comment> & {
-  hasUser: boolean;
+  hasUser?: boolean;
   user?: Partial<User>;
-  hasPost: boolean;
+  hasPost?: boolean;
   post?: Partial<Post>;
 };
 
@@ -22,6 +28,10 @@ export interface GetCommentsParams {
   page: number;
   pageSize: number;
   criteria?: GetCommentsCriteria;
+  includes?: CommentRelations;
+}
+
+export interface FindCommentParams {
   includes?: CommentRelations;
 }
 
@@ -34,12 +44,13 @@ export class CommentRepository extends DatabaseRepository {
       .executeTakeFirstOrThrow();
   }
 
-  getComments(params: GetCommentsParams) {
-    const { page, pageSize, criteria, includes } = params;
-
-    const offset = (page - 1) * pageSize;
-
-    return this.getDB()
+  getComments({
+    page,
+    pageSize,
+    criteria = {},
+    includes = [],
+  }: GetCommentsParams) {
+    let query = this.getDB()
       .selectFrom("comments")
       .where((eb) => {
         const filters: Expression<SqlBool>[] = [];
@@ -56,18 +67,18 @@ export class CommentRepository extends DatabaseRepository {
           }
 
           if (criteria.hasUser) {
-            filters.push(eb.exists(this.userRows(eb.ref("comments.userId"))));
+            filters.push(this.hasUser(eb.ref("comments.userId")));
           } else if (criteria.user) {
             filters.push(
-              eb.exists(this.userRows(eb.ref("comments.userId"), criteria.user))
+              this.hasUser(eb.ref("comments.userId"), criteria.user)
             );
           }
 
           if (criteria.hasPost) {
-            filters.push(eb.exists(this.postRows(eb.ref("comments.postId"))));
+            filters.push(this.hasPost(eb.ref("comments.postId")));
           } else if (criteria.post) {
             filters.push(
-              eb.exists(this.postRows(eb.ref("comments.postId"), criteria.post))
+              eb.exists(this.hasPost(eb.ref("comments.postId"), criteria.post))
             );
           }
         }
@@ -75,25 +86,16 @@ export class CommentRepository extends DatabaseRepository {
         return eb.and(filters);
       })
       .selectAll("comments")
-      .select((eb) => {
-        const selections: SelectExpression<DB, "comments">[] = [];
-
-        if (includes) {
-          if (includes.includes("user")) {
-            selections.push(this.user(eb.ref("comments.userId")).as("user"));
-          }
-
-          if (includes.includes("post")) {
-            selections.push(this.post(eb.ref("comments.postId")).as("post"));
-          }
-        }
-
-        return selections;
-      })
-      .orderBy("comments.created_at", "desc")
+      .$if(includes.includes("user"), (qb) =>
+        qb.select((eb) => this.user(eb.ref("comments.userId")).as("user"))
+      )
+      .$if(includes.includes("post"), (qb) =>
+        qb.select((eb) => this.post(eb.ref("comments.postId")).as("post"))
+      )
       .limit(pageSize)
-      .offset(offset)
-      .execute();
+      .offset(this.getOffset(page, pageSize));
+
+    return query.execute();
   }
 
   async getTotalComments(criteria?: GetCommentsCriteria) {
@@ -123,11 +125,17 @@ export class CommentRepository extends DatabaseRepository {
     return +total;
   }
 
-  findComment(id: number) {
+  findComment(id: number, { includes = [] }: FindCommentParams = {}) {
     return this.getDB()
       .selectFrom("comments")
-      .where("id", "=", id)
+      .where("comments.id", "=", id)
       .selectAll()
+      .$if(includes.includes("user"), (qb) =>
+        qb.select((eb) => this.user(eb.ref("comments.userId")).as("user"))
+      )
+      .$if(includes.includes("post"), (qb) =>
+        qb.select((eb) => this.post(eb.ref("comments.postId")).as("post"))
+      )
       .executeTakeFirst();
   }
 
@@ -147,44 +155,50 @@ export class CommentRepository extends DatabaseRepository {
       .executeTakeFirst();
   }
 
-  protected userRows(userId: Expression<number>, criteria?: Partial<User>) {
-    return this.getDB()
-      .selectFrom("users")
-      .whereRef("users.id", "=", userId)
-      .where((eb) => {
-        const filters: Expression<SqlBool>[] = [];
+  protected hasUser(userId: Expression<number>, criteria?: Partial<User>) {
+    const { exists, selectFrom } = expressionBuilder<DB, never>();
 
-        if (criteria) {
-          if (criteria.email) {
-            filters.push(eb("users.email", "=", criteria.email));
+    return exists(
+      selectFrom("users")
+        .whereRef("users.id", "=", userId)
+        .where((eb) => {
+          const filters: Expression<SqlBool>[] = [];
+
+          if (criteria) {
+            if (criteria.email) {
+              filters.push(eb("users.email", "=", criteria.email));
+            }
+
+            if (criteria.name) {
+              filters.push(eb("users.name", "=", criteria.name));
+            }
           }
 
-          if (criteria.name) {
-            filters.push(eb("users.name", "=", criteria.name));
-          }
-        }
-
-        return eb.and(filters);
-      })
-      .select(sql<number>`1`.as("1"));
+          return eb.and(filters);
+        })
+        .select(sql<number>`1`.as("1"))
+    );
   }
 
-  protected postRows(postId: Expression<number>, criteria?: Partial<Post>) {
-    return this.getDB()
-      .selectFrom("posts")
-      .whereRef("posts.id", "=", postId)
-      .where((eb) => {
-        const filters: Expression<SqlBool>[] = [];
+  protected hasPost(postId: Expression<number>, criteria?: Partial<Post>) {
+    const { exists, selectFrom } = expressionBuilder<DB, never>();
 
-        if (criteria) {
-          if (criteria.title) {
-            filters.push(eb("posts.title", "=", criteria.title));
+    return exists(
+      selectFrom("posts")
+        .whereRef("posts.id", "=", postId)
+        .where((eb) => {
+          const filters: Expression<SqlBool>[] = [];
+
+          if (criteria) {
+            if (criteria.title) {
+              filters.push(eb("posts.title", "=", criteria.title));
+            }
           }
-        }
 
-        return eb.and(filters);
-      })
-      .select(sql<number>`1`.as("1"));
+          return eb.and(filters);
+        })
+        .select(sql<number>`1`.as("1"))
+    );
   }
 
   protected user(userId: Expression<number>) {
