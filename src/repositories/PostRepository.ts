@@ -1,45 +1,15 @@
 import { Expression, expressionBuilder, sql, SqlBool } from "kysely";
 import { jsonArrayFrom, jsonObjectFrom } from "kysely/helpers/postgres";
 import DatabaseRepository from "@/repositories/DatabaseRepository";
-import {
-  InsertablePost,
-  Post,
-  PostRelations,
-  Tag,
-  UpdateablePost,
-  User,
-} from "@/types/models";
+import { InsertablePost, Tag, UpdateablePost, User } from "@/types/models";
 import { DB } from "@/types/db";
+import {
+  GetPostsCriteria,
+  GetPostsParams,
+  GetPostsIncludes,
+} from "@/repositories/PostRepository.types";
 
-export type GetPostsCriteria = Partial<Post> & {
-  hasAuthor?: boolean;
-  author?: Partial<User>;
-  hasTags?: boolean;
-  tags?: Partial<Tag>;
-};
-
-export type GetPostsSort = (
-  | "id"
-  | "-id"
-  | "title"
-  | "-title"
-  | "createdAt"
-  | "-createdAt"
-  | "author.name"
-  | "-author.name"
-)[];
-
-export interface GetPostsParams {
-  page: number;
-  pageSize: number;
-  criteria?: GetPostsCriteria;
-  includes?: PostRelations;
-  sorts?: GetPostsSort;
-}
-
-export interface FindPostParams {
-  includes?: PostRelations;
-}
+export * from "@/repositories/PostRepository.types";
 
 export default class PostRepository extends DatabaseRepository {
   getPosts({
@@ -97,22 +67,31 @@ export default class PostRepository extends DatabaseRepository {
       query = query.orderBy("posts.id asc");
     } else {
       for (const sort of sorts) {
-        if (sort === "id") {
-          query = query.orderBy("posts.id asc");
-        } else if (sort === "-id") {
-          query = query.orderBy("posts.id desc");
-        } else if (sort === "title") {
-          query = query.orderBy("posts.title asc");
-        } else if (sort === "-title") {
-          query = query.orderBy("posts.title desc");
-        } else if (sort === "createdAt") {
-          query = query.orderBy("posts.createdAt asc");
-        } else if (sort === "-createdAt") {
-          query = query.orderBy("posts.createdAt desc");
-        } else if (sort === "author.name") {
-          query = query.orderBy("authors.name asc");
-        } else if (sort === "-author.name") {
-          query = query.orderBy("authors.name desc");
+        switch (sort) {
+          case "id":
+            query = query.orderBy("posts.id asc");
+            break;
+          case "-id":
+            query = query.orderBy("posts.id desc");
+            break;
+          case "title":
+            query = query.orderBy("posts.title asc");
+            break;
+          case "-title":
+            query = query.orderBy("posts.title desc");
+            break;
+          case "createdAt":
+            query = query.orderBy("posts.createdAt asc");
+            break;
+          case "-createdAt":
+            query = query.orderBy("posts.createdAt desc");
+            break;
+          case "author.name":
+            query = query.orderBy("authors.name asc");
+            break;
+          case "-author.name":
+            query = query.orderBy("authors.name desc");
+            break;
         }
       }
     }
@@ -120,39 +99,37 @@ export default class PostRepository extends DatabaseRepository {
     return query.execute();
   }
 
-  async getTotalPosts(criteria?: GetPostsCriteria) {
+  async getTotalPosts(criteria: GetPostsCriteria = {}) {
     const [{ total }] = await this.getDB()
       .selectFrom("posts")
       .innerJoin("users as authors", "authors.id", "posts.authorId")
       .where((eb) => {
         const filters: Expression<SqlBool>[] = [];
 
-        if (criteria) {
-          if (criteria.id) {
-            filters.push(eb("posts.id", "=", criteria.id));
-          }
+        if (criteria.id) {
+          filters.push(eb("posts.id", "=", criteria.id));
+        }
 
-          if (criteria.authorId) {
-            filters.push(eb("posts.authorId", "=", criteria.authorId));
-          }
+        if (criteria.authorId) {
+          filters.push(eb("posts.authorId", "=", criteria.authorId));
+        }
 
-          if (criteria.title) {
-            filters.push(eb("posts.title", "=", criteria.title));
-          }
+        if (criteria.title) {
+          filters.push(eb("posts.title", "=", criteria.title));
+        }
 
-          if (criteria.hasAuthor) {
-            filters.push(this.hasAuthor(eb.ref("posts.authorId")));
-          } else if (criteria.author) {
-            filters.push(
-              this.hasAuthor(eb.ref("posts.authorId"), criteria.author)
-            );
-          }
+        if (criteria.hasAuthor) {
+          filters.push(this.hasAuthor(eb.ref("posts.authorId")));
+        } else if (criteria.author) {
+          filters.push(
+            this.hasAuthor(eb.ref("posts.authorId"), criteria.author)
+          );
+        }
 
-          if (criteria.hasTags) {
-            filters.push(this.hasTags(eb.ref("posts.id")));
-          } else if (criteria.tags) {
-            filters.push(this.hasTags(eb.ref("posts.id"), criteria.tags));
-          }
+        if (criteria.hasTags) {
+          filters.push(this.hasTags(eb.ref("posts.id")));
+        } else if (criteria.tags) {
+          filters.push(this.hasTags(eb.ref("posts.id"), criteria.tags));
         }
 
         return eb.and(filters);
@@ -163,7 +140,7 @@ export default class PostRepository extends DatabaseRepository {
     return +total;
   }
 
-  findPost(id: number, { includes = [] }: FindPostParams = {}) {
+  findPost(id: number, includes: GetPostsIncludes = []) {
     return this.getDB()
       .selectFrom("posts")
       .where("posts.id", "=", id)
@@ -202,9 +179,10 @@ export default class PostRepository extends DatabaseRepository {
   }
 
   protected author(authorId: Expression<number>) {
+    const { selectFrom } = expressionBuilder<DB, never>();
+
     return jsonObjectFrom(
-      this.getDB()
-        .selectFrom("users as authors")
+      selectFrom("users as authors")
         .whereRef("authors.id", "=", authorId)
         .selectAll("authors")
     );
@@ -236,9 +214,10 @@ export default class PostRepository extends DatabaseRepository {
   }
 
   protected tags(postId: Expression<number>) {
+    const { selectFrom } = expressionBuilder<DB, never>();
+
     return jsonArrayFrom(
-      this.getDB()
-        .selectFrom("tags")
+      selectFrom("tags")
         .innerJoin("postTags", (join) =>
           join
             .onRef("postTags.tagId", "=", "tags.id")
